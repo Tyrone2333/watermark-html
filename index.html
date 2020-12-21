@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>证件照水印保护 Watermark</title>
+  <style>
+    body {
+      margin: 0;
+    }
+
+    #wm-app {
+      width: 800px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    #wm-app .wm-main {
+      width: 100%;
+      height: 400px;
+    }
+
+    #canvas {
+      width: 100%;
+    }
+
+    #content {
+      width: 400px;
+    }
+
+    #select-file {
+      width: 250px;
+    }
+  </style>
+</head>
+
+<body>
+<div id="wm-app">
+  <h1> 证件照水印保护 Watermark </h1>
+  <div class="wm-main">
+    <input type="file" id="select-file" />
+    <input type="text" id="content" value="此证件照仅供 XXX 于 2020 年 12 月 30 日前 实名认证 使用。">
+    <label for="small-watermark"><input type="checkbox" id="small-watermark" checked />小字水印</label>
+    <br />
+
+    <canvas id="canvas" width="800" height="600"></canvas>
+  </div>
+</div>
+<script>
+  (function () {
+
+    class Watermark {
+      // 画板
+      canvas = null;
+      ctx = null;
+
+
+      // 需要处理的图片
+      image = null;
+
+      constructor(canvas, image) {
+        if (!canvas instanceof HTMLCanvasElement) {
+          throw new Error('canvas is not Canvas Element');
+        }
+        this.canvas = canvas;
+        this.ctx = this.canvas.getContext('2d');
+
+        // 图片可以后期推送
+        if (image instanceof HTMLImageElement) {
+          this.initCanvas(image)
+        }
+      }
+
+      // 加载远程图片
+      loadImg(src) {
+        return new Promise((resolve, reject) => {
+          let img = new Image();
+          img.onload = (event) => {
+            this.initCanvas(event.target);
+            resolve(this);
+          }
+          img.src = src;
+        })
+      }
+
+      // 初始化画板
+      initCanvas(image) {
+        if (image instanceof HTMLImageElement) {
+          this.image = image;
+        }
+        if (!this.image instanceof HTMLImageElement) {
+          throw new Error('No valid image provided');
+        }
+
+        // 设置画板宽高
+        let height = this.image.height,
+                width = this.image.width,
+                ratio = 1;
+
+        if (height > 800 || width > 800) {
+          let height_ratio = 800 / height,
+                  width_ratio = 800 / width;
+          ratio = height_ratio < width_ratio ? height_ratio : width_ratio;
+          height *= ratio;
+          width *= ratio;
+        }
+
+        this.canvas.height = height;
+        this.canvas.width = width;
+
+        // 输出 图片
+        this.ctx.scale(ratio, ratio)
+        this.ctx.drawImage(this.image, 0, 0);
+        this.ctx.scale(1 / ratio, 1 / ratio)
+      }
+
+      // 设置文字样式
+      setStyle(font) {
+        this.ctx.font = font;
+      }
+
+      // 设置文字
+      setContent(content, small) {
+        // 重新设置图片
+        this.initCanvas();
+
+        // 设置默认样式
+        this.setStyle("24px Arial");
+        this.ctx.globalAlpha = 0.4;
+        this.ctx.fillStyle = "#666";
+
+        // 测试输出文字宽度
+        let width = this.ctx.measureText(content).width;
+
+        // 围绕图片中心设置旋转
+        this.ctx.rotate(-20 * Math.PI / 180);
+
+        // 循环设置水印
+        for (let x = -1 * this.canvas.width; x < (this.canvas.width + this.canvas.height) * 2; x += 60) {
+          for (let y = (-1 * this.canvas.height) - (x * width * 0.5); y < (this.canvas.width + this.canvas.height) * 2; y += width + 24) {
+            this.ctx.fillText(content, y, x);
+          }
+        }
+
+        // 还原旋转
+        this.ctx.rotate(20 * Math.PI / 180);
+
+        if (!small) return;
+
+        // 再次随机添加细碎小文字
+        this.setStyle("12px Microsoft YaHei MingLiU Arial");
+        this.ctx.globalAlpha = 0.15;
+        this.ctx.fillStyle = "#CCC";
+
+        // 测试输出文字宽度
+        width = this.ctx.measureText(content).width;
+
+        // 循环设置水印
+        for (let x = 0, i = 0; x < this.canvas.width; x += 36, i++) {
+          for (let y = -1 * (i % 2 == 1 ? width / 2 : 0); y < this.canvas.height + width; y += width + 36) {
+            this.ctx.fillText(content, y, x);
+          }
+        }
+      }
+    }
+
+    // 加载远程图片
+    let app = new Watermark(document.querySelector('#canvas'));
+    app.loadImg('./default.jpg').then((app) => {
+      generate();
+    });
+
+    // 生成水印
+    function generate() {
+      let content = document.getElementById('content').value,
+              small = document.getElementById('small-watermark').checked;
+      app.setContent(content, small);
+    }
+
+    // 选择文件后
+    document.getElementById('select-file').onchange = (event) => {
+      let reader = new FileReader();
+      reader.onload = (event) => {
+        app.loadImg(event.target.result).then((app) => {
+          generate()
+        });
+      }
+      reader.readAsDataURL(event.target.files[0]);
+    }
+
+    document.getElementById('content').oninput = document.getElementById('small-watermark').onchange = generate;
+  })();
+</script>
+</body>
+
+</html>
